@@ -1,0 +1,111 @@
+---
+title: "Recommendation Engine"
+output: pdf_document
+---
+
+## Recommendation Engine - Item Based Collaborative Filtering ##
+
+Recommender systems are active information filtering systems which personalize the information coming to a user based on his interests. These systems are used widely for recommending movies, articles, restaurants, places to visit, items to buy etc.Industry at large uses two different types of recommendation Engines - Content and Collaborative filtering based. This project is all about Collaborative filtering. Further Collaborative filtering is further divided into 2 type - User based and Item based.
+
+This project deals with item based collaborative filtering algorithm. In item-based collaborative filtering, we consider set of items rated by the user and computes item similarities with the targeted item. Once similar items are found, and then rating for the new item is predicted by taking weighted average of the user's rating on these similar items. 
+
+## Library ##
+```{r echo = FALSE}
+library(reshape2)
+library(dtplyr)
+library(lsa)
+library(SnowballC)
+```
+
+
+## Data ##
+```{r echo = FALSE}
+setwd("C:/Program Files/RStudio/recomendation_system")
+DataMovieRating <- read.csv("movie_rating.csv")
+DataMovieRating <- data.frame(DataMovieRating)
+
+```
+
+## Implementing Item based Collaborative Filtering ##
+
+This involves two steps: 
+Calculating Similarity Function 
+Predicting the targeted item rating for the targeted User.
+
+```{r echo = FALSE}
+#data processing and formatting
+movie_ratings <- as.data.frame(acast(DataMovieRating, critic~title, value.var="rating"))
+```
+
+## Calculate item Similarity ##
+
+We will calculate the similarity between co-rated items. We use cosine similarity or pearson-similarity to compute the similarity between items. The output produced by this is similarity matrix between Items.
+
+
+```{r echo = FALSE}
+x <- movie_ratings[,1:6]
+x[is.na(x)] = 0
+item_sim <- cosine(as.matrix(x))
+```
+
+
+## Recommending ##
+
+For recommending movies we are using the above similarity matrix. As first step, separate the non-rated movies and a weighted matrix is created by multiplying user similarity score (item_sim[,6]) with ratings given by other users.
+
+In this most important step, we first predict the items which the user is not rated by making use of the ratings he has made to previously interacted items and the similarity values calculated in the previous step. First we select item to be predicted, we predict the rating for that particular movie by calculating the weighted sum of ratings made to movies similar to movie rating which were not rated or has NA. i.e We take the similarity score for each rated movie which was not rated or has NA and multiply with the corresponding rating and sum up all the for all the rated movies. This final sum is divided by total sum of similarity scores of rated items w.r.t the movie which was not rated or has NA.
+
+```{r echo = FALSE}
+# Function to recommend items
+
+ rec_itm_for_user <- function(userno)
+ {
+   #extract all the movies not rated by a user
+   userRatings <- movie_ratings[userno,]
+   non_rated_movies <- list()
+   rated_movies <- list()
+   for(i in 2:ncol(userRatings)){
+     if(is.na(userRatings[,i]))
+     {
+       non_rated_movies <- c(non_rated_movies,colnames(userRatings)[i])
+     }
+     else
+     {
+       rated_movies <- c(rated_movies,colnames(userRatings)[i])
+     }
+   }
+   non_rated_movies <- unlist(non_rated_movies)
+   rated_movies <- unlist(rated_movies)
+   #create weighted similarity for all the rated movies by a user
+   non_rated_pred_score <- list()
+   for(j in 1:length(non_rated_movies)){
+     temp_sum <- 0
+     df <- item_sim[which(rownames(item_sim)==non_rated_movies[j]),]
+     for(i in 1:length(rated_movies)){
+       temp_sum <- temp_sum+ df[which(names(df)==rated_movies[i])]
+        }
+     weight_mat <- df*movie_ratings[userno,2:6]
+     non_rated_pred_score <- c(non_rated_pred_score,rowSums(weight_mat,na.rm=T)/temp_sum)
+     }
+   pred_rat_mat <- as.data.frame(non_rated_pred_score)
+   names(pred_rat_mat) <- non_rated_movies
+   for(k in 1:ncol(pred_rat_mat)){
+     movie_ratings[userno,][which(names(movie_ratings[userno,]) == names(pred_rat_mat)[k])] = pred_rat_mat[1,k]
+     
+   }
+   
+   return(movie_ratings[userno,])
+  
+ }
+ 
+rec_itm_for_user()
+
+```
+
+## Conclusion ##
+
+Calling above function gives the predicted values not previously seen values for movies in the original data set movie_ratings. This we can sort and recommend the top items.
+
+
+
+
